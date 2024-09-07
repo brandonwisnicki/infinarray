@@ -1,0 +1,10 @@
+{
+    "extends": "./tsconfig.json", // The file above. You can also just extend the base `tsconfig.json` (in the root of the monorepo) instead, adding `include: [ "./src/**/*"]`, or write the `compilerOptions` here
+    "compilerOptions": {
+        "noEmit": false,
+        "outDir": "./dist",
+    },
+    "exclude": [ // This way we avoid compiling tests into JS
+        "**/*.test.ts"
+    ]
+}

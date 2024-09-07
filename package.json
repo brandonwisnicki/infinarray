@@ -1,0 +1,25 @@
+{
+  "name": "infinarray",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "type": "module",
+  "scripts": {
+    "test": "tsx --test \"./test/**/*.test.ts\""
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "author": "Brandon Wisnicki",
+  "license": "MIT",
+  "description": "",
+  "devDependencies": {
+    "@shopify/eslint-plugin": "^46.0.0",
+    "@tsconfig/recommended": "^1.0.7",
+    "@types/node": "^22.5.4",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "3.3.3",
+    "tinybench": "^2.9.0",
+    "typescript": "^5.5.4"
+  }
+}
