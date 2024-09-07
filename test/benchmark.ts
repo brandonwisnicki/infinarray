@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 import { Bench, Task } from 'tinybench';
-import Infinarray from '../src/infinarray';
+import Infinarray from '../src';
 
 const BIG_FILE_PATH = './test/data/big_file.json';
 const MEDIUM_FILE_PATH = './test/data/medium_file.json';

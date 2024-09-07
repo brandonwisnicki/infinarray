@@ -1,7 +1,7 @@
 /* eslint-disable dot-notation */
 import assert from 'node:assert';
 import test, { suite } from 'node:test';
-import Infinarray from '../src/infinarray';
+import Infinarray from '../src';
 
 const BIG_FILE_PATH = './test/data/big_file.json';
 const SMALL_FILE_PATH = './test/data/small_file.json';

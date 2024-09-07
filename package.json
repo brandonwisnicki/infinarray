@@ -1,16 +1,24 @@
 {
   "name": "infinarray",
   "version": "1.0.1",
-  "main": "./src/infinarray.ts",
+  "main": "./dist/index.cjs",
   "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
   "scripts": {
-    "test": "tsx --test \"./test/**/*.test.ts\""
+    "test": "tsx --test \"./test/**/*.test.ts\"",
+    "build": "npx unbuild"
   },
   "engines": {
     "node": ">=20.0.0"
   },
+  "types": "./dist/index.d.ts",
   "files": [
-    "src/"
+    "dist"
   ],
   "author": "Brandon Wisnicki",
   "license": "MIT",
