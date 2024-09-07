@@ -1,7 +1,7 @@
 {
   "name": "infinarray",
-  "version": "1.0.2",
-  "main": "src/infinarray.ts",
+  "version": "1.0.1",
+  "main": "./src/infinarray.ts",
   "type": "module",
   "scripts": {
     "test": "tsx --test \"./test/**/*.test.ts\""
@@ -24,12 +24,10 @@
     "url": "git+https://github.com/brandonwisnicki/infinarray.git"
   },
   "keywords": [
-    "Stream",
-    "Javascript",
-    "Typescript",
-    "Node",
-    "Array",
-    "Large file"
+    "stream",
+    "file stream",
+    "array stream",
+    "large file"
   ],
   "devDependencies": {
     "@shopify/eslint-plugin": "^46.0.0",
