@@ -2,14 +2,16 @@
 
 # Infinarray - Work with [infinitely sized](https://en.wikipedia.org/wiki/False_advertising#Puffing) arrays
 
-### Infinarray allows you to access large files as if it were an array. Call array functions like `filter` and `forEach` without having to think about streams.
+### Infinarray allows you to access large files as if it were an array.
+
+Call array functions like `filter` and `forEach` without having to think about streams. Infinarray caches array data to allow for fast sequential array indexing and fast random sampling.
 
 ## Quick Start
 
 ### Installation: `npm i infinarray`
 
 ```typescript
-import Infinarray from 'infinarray';
+import { Infinarray } from 'infinarray';
 
 const array = new Infinarray<string>('./my-big-file.txt');
 await array.init();
@@ -82,6 +84,8 @@ The Infinarray constructor takes in a file path string, and optionally a configu
 ```
 
 ```typescript
+import { Infinarray } from 'infinarray';
+
 const myArray = new Infinarray<[string, number, string]>('music.txt', {
   delimiter: '\n',
   skipHeader: true,
