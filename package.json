@@ -1,7 +1,7 @@
 {
   "name": "infinarray",
   "version": "1.0.0",
-  "main": "index.ts",
+  "main": "src/infinarray.ts",
   "type": "module",
   "scripts": {
     "test": "tsx --test \"./test/**/*.test.ts\""
@@ -9,9 +9,28 @@
   "engines": {
     "node": ">=20.0.0"
   },
+  "files": [
+    "src/"
+  ],
   "author": "Brandon Wisnicki",
   "license": "MIT",
-  "description": "Access a file as if it were an array",
+  "description": "Access huge files as if it were an array",
+  "bugs": {
+    "url": "https://github.com/brandonwisnicki/infinarray/issues"
+  },
+  "homepage": "https://github.com/brandonwisnicki/infinarray",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/brandonwisnicki/infinarray.git"
+  },
+  "keywords": [
+    "Stream",
+    "Javascript",
+    "Typescript",
+    "Node",
+    "Array",
+    "Large file"
+  ],
   "devDependencies": {
     "@shopify/eslint-plugin": "^46.0.0",
     "@tsconfig/recommended": "^1.0.7",

@@ -2,7 +2,7 @@
 
 # Infinarray - Work with [infinitely sized](https://en.wikipedia.org/wiki/False_advertising#Puffing) arrays
 
-Infinarray allows you to access large files as if it were an array
+### Infinarray allows you to access large files as if it were an array. Call array functions like `filter` and `forEach` without having to think about streams.
 
 ## Quick Start
 
@@ -41,6 +41,7 @@ This is my use case for building Infinarray. It is currently being used to allow
 - Automatically caches elements you will likely use to prevent unnecessary file reads
 - Use all the most common JS array operations you already know
 - Fully type-safe
+- Built around Node.js streams
 
 ## API
 
