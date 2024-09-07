@@ -11,7 +11,7 @@
   },
   "author": "Brandon Wisnicki",
   "license": "MIT",
-  "description": "",
+  "description": "Access a file as if it were an array",
   "devDependencies": {
     "@shopify/eslint-plugin": "^46.0.0",
     "@tsconfig/recommended": "^1.0.7",

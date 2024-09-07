@@ -2,13 +2,15 @@
 
 # Infinarray - Work with [infinitely sized](https://en.wikipedia.org/wiki/False_advertising#Puffing) arrays
 
-Infinarray wraps readable streams into Array-like functions.
+Infinarray allows you to access large files as if it were an array
 
 ## Quick Start
 
-`npm i infinarray`
+### Installation: `npm i infinarray`
 
 ```typescript
+import Infinarray from 'infinarray';
+
 const array = new Infinarray<string>('./my-big-file.txt');
 await array.init();
 
@@ -21,7 +23,7 @@ await array.includes(value);
 await array.filter((el) => el === 'foobar'); // returns a js array of filtered elements
 ```
 
-All available functions are below
+See [below](#api) for all available functions
 
 ## Use Case
 
@@ -117,7 +119,7 @@ All configuration options are below:
 
 The benchmarking program is in `test/benchmark.ts`
 
-These are my results running on a Intel i7-14700K
+These are results from a machine with a Intel i7-14700K, 32GB RAM
 
 ```
 ┌───────────────────────────────────────┬─────────────┬────────────────────────┬────────────┬─────────┐
