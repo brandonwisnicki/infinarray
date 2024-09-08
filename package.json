@@ -1,6 +1,6 @@
 {
   "name": "infinarray",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "main": "./dist/index.cjs",
   "type": "module",
   "exports": {
@@ -12,7 +12,7 @@
   "scripts": {
     "test": "tsx --test \"./test/**/*.test.ts\"",
     "build": "npx unbuild",
-    "publish": "npx unbuild && npm run publish"
+    "publish": "npx unbuild && npm publish"
   },
   "engines": {
     "node": ">=20.0.0"
