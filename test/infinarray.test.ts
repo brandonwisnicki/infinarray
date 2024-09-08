@@ -1,16 +1,246 @@
 /* eslint-disable dot-notation */
 import assert from 'node:assert';
-import test, { suite } from 'node:test';
-import Infinarray from '../src';
+import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
+import test, { before, suite } from 'node:test';
+import { Infinarray } from '../src';
 
-const BIG_FILE_PATH = './test/data/big_file.json';
-const SMALL_FILE_PATH = './test/data/small_file.json';
-const SMALL_FILE_HEADER_PATH = './test/data/small_file_header.json';
+const BIG_FILE_PATH = './test/data/big_file.jsonl';
+const SMALL_FILE_PATH = './test/data/small_file.jsonl';
+const SMALL_FILE_HEADER_PATH = './test/data/small_file_header.jsonl';
+const MEDIUM_FILE_PATH = './test/data/medium_file.jsonl';
+const TINY_FILE_PATH = './test/data/tiny_file.jsonl';
+const EMPTY_FILE_PATH = './test/data/empty.jsonl';
 
-const TINY_FILE_PATH = './test/data/tiny_file.json';
-const EMPTY_FILE_PATH = './test/data/empty.json';
+const TEMP_PATH = './test/temp';
+
+const clearTempFolder = () => {
+  if (!existsSync(TEMP_PATH)) {
+    mkdirSync(TEMP_PATH);
+  }
+  rmSync(TEMP_PATH, { recursive: true, force: true });
+};
+
+const createWritableFileCopy = (path: string, testName: string) => {
+  const newPath = `${TEMP_PATH}/${testName}.jsonl`;
+  cpSync(path, newPath);
+  return newPath;
+};
 
 suite('infinarray', () => {
+  before(clearTempFolder);
+  suite('writable array', () => {
+    test('empty file push', async () => {
+      const arr = new Infinarray<string[]>(
+        createWritableFileCopy(EMPTY_FILE_PATH, 'push-and-get-empty'),
+        {
+          readonly: false,
+        }
+      );
+      await arr.init();
+      assert.deepStrictEqual(await arr.at(0), undefined);
+
+      const elToPush = ['Penguin', 'Monkey', 'Dolphin'];
+      const length = await arr.push(elToPush);
+
+      console.log('HII');
+      assert.deepStrictEqual(await arr.at(0), elToPush);
+      assert.deepStrictEqual(length, 1);
+
+      await arr.flushPushedValues();
+    });
+    test('small file push', async () => {
+      const arr = new Infinarray<string[]>(
+        createWritableFileCopy(TINY_FILE_PATH, 'push-and-get-small'),
+        {
+          readonly: false,
+        }
+      );
+      await arr.init();
+      assert.deepStrictEqual(await arr.at(-1), ['Crane Fly', 'Toad', 'Fossa']);
+
+      const elToPush = ['Penguin', 'Monkey', 'Dolphin'];
+      const length = await arr.push(elToPush);
+      assert.deepStrictEqual(await arr.at(-1), elToPush);
+      assert.deepStrictEqual(length, 5);
+      await arr.flushPushedValues();
+    });
+    test('push and get', async () => {
+      const arr = new Infinarray<string[]>(
+        createWritableFileCopy(MEDIUM_FILE_PATH, 'push-and-get'),
+        {
+          readonly: false,
+        }
+      );
+      await arr.init();
+      assert.deepStrictEqual(await arr.at(-1), [
+        'Giraffe',
+        'White-eye',
+        'Xerus',
+      ]);
+
+      const elToPush = ['Penguin', 'Monkey', 'Dolphin'];
+      const length = await arr.push(elToPush);
+      assert.deepStrictEqual(await arr.at(-1), elToPush);
+      assert.strictEqual(length, 150_001);
+      assert.strictEqual(arr.length, 150_001);
+
+      // moves cache away from end
+      await arr.at(0);
+
+      assert.deepStrictEqual(await arr.at(-1), elToPush);
+    });
+    test('push array spread', async () => {
+      const arr = new Infinarray<string[]>(
+        createWritableFileCopy(MEDIUM_FILE_PATH, 'push-array-spread'),
+        {
+          readonly: false,
+        }
+      );
+      await arr.init();
+      assert.deepStrictEqual(await arr.at(-1), [
+        'Giraffe',
+        'White-eye',
+        'Xerus',
+      ]);
+
+      const elToPush = [
+        ['Penguin', 'Monkey', 'Dolphin'],
+        ['Penguin', 'Monkey', 'Dolphin'],
+        ['Penguin', 'Monkey', 'Dolphin'],
+        ['Penguin', 'Monkey', 'Dolphin'],
+        ['Penguin', 'Monkey', 'Dolphin'],
+      ];
+      const length = await arr.push(...elToPush);
+      assert.deepStrictEqual(await arr.at(-1), [
+        'Penguin',
+        'Monkey',
+        'Dolphin',
+      ]);
+      assert.deepStrictEqual(await arr.at(-5), [
+        'Penguin',
+        'Monkey',
+        'Dolphin',
+      ]);
+      assert.deepStrictEqual(await arr.at(-6), [
+        'Giraffe',
+        'White-eye',
+        'Xerus',
+      ]);
+      assert.strictEqual(length, 150_005);
+      assert.strictEqual(arr.length, 150_005);
+
+      // moves cache away from end
+      await arr.at(0);
+
+      assert.deepStrictEqual(await arr.at(-1), [
+        'Penguin',
+        'Monkey',
+        'Dolphin',
+      ]);
+    });
+    test('push and sample', async () => {
+      const arr = new Infinarray<string[]>(
+        createWritableFileCopy(MEDIUM_FILE_PATH, 'push-and-sample'),
+        {
+          readonly: false,
+          randomFn: () => 0,
+        }
+      );
+      await arr.init();
+
+      const elToPush = ['Penguin', 'Monkey', 'Dolphin'];
+      await arr.push(elToPush);
+
+      assert.deepStrictEqual(arr['randomElementsCache'][0].value, elToPush);
+    });
+    test('push and auto flush', async () => {
+      const bufferSize = 25;
+      const arr = new Infinarray<string[]>(
+        createWritableFileCopy(MEDIUM_FILE_PATH, 'push-and-auto-flush'),
+        {
+          readonly: false,
+          maxPushedValuesBufferSize: bufferSize,
+        }
+      );
+      await arr.init();
+
+      const elToPush = ['Penguin', 'Monkey', 'Dolphin'];
+      assert.strictEqual(arr['pushedValuesBuffer'].length, 0);
+
+      for (let i = 0; i < bufferSize; i++) {
+        await arr.push(elToPush);
+        assert.strictEqual(arr['pushedValuesBuffer'].length, i + 1);
+      }
+      await arr.push(elToPush);
+      assert.strictEqual(arr['pushedValuesBuffer'].length, 0);
+
+      assert.deepStrictEqual(await arr.at(-1), elToPush);
+    });
+    test('flush every push', async () => {
+      const pushIters = 25;
+      const arr = new Infinarray<string[]>(
+        createWritableFileCopy(MEDIUM_FILE_PATH, 'flush-every-push'),
+        {
+          readonly: false,
+          maxPushedValuesBufferSize: 0,
+        }
+      );
+      await arr.init();
+
+      const elToPush = ['Penguin', 'Monkey', 'Dolphin'];
+      assert.strictEqual(arr['pushedValuesBuffer'].length, 0);
+
+      for (let i = 0; i < pushIters; i++) {
+        await arr.push(elToPush);
+        assert.strictEqual(arr['pushedValuesBuffer'].length, 0);
+      }
+      assert.deepStrictEqual(arr.length, 150_025);
+
+      assert.deepStrictEqual(await arr.at(-1), elToPush);
+    });
+    test('push and force flush', async () => {
+      const arr = new Infinarray<string[]>(
+        createWritableFileCopy(MEDIUM_FILE_PATH, 'push-and-force-flush'),
+        {
+          readonly: false,
+        }
+      );
+      await arr.init();
+
+      const elToPush = ['Penguin', 'Monkey', 'Dolphin'];
+      assert.strictEqual(arr['pushedValuesBuffer'].length, 0);
+
+      await arr.push(elToPush);
+      assert.strictEqual(arr['pushedValuesBuffer'].length, 1);
+
+      await arr.push(elToPush);
+      assert.strictEqual(arr['pushedValuesBuffer'].length, 2);
+
+      await arr.push(elToPush);
+      assert.strictEqual(arr['pushedValuesBuffer'].length, 3);
+      assert.deepStrictEqual(await arr.at(-1), elToPush);
+
+      // move cache
+      assert.deepStrictEqual(await arr.at(0), [
+        'Banded Sea Krait',
+        'Turaco',
+        'Hermit Crab',
+      ]);
+
+      await arr.flushPushedValues();
+
+      assert.strictEqual(arr['pushedValuesBuffer'].length, 0);
+      assert.deepStrictEqual(await arr.at(-1), elToPush);
+
+      // move cache
+      assert.deepStrictEqual(await arr.at(0), [
+        'Banded Sea Krait',
+        'Turaco',
+        'Hermit Crab',
+      ]);
+    });
+  });
+
   suite('init', () => {
     test('big file', async () => {
       const arr = new Infinarray<any[]>(BIG_FILE_PATH);

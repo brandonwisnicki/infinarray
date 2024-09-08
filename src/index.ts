@@ -1,4 +1,5 @@
-import { createReadStream } from 'fs';
+import { createReadStream, readFileSync, readSync, statSync } from 'fs';
+import { open } from 'fs/promises';
 import { Writable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { getLines } from './lines';
@@ -14,12 +15,20 @@ interface Checkpoint {
 interface InfinarrayOptions<T> {
   delimiter: string;
   skipHeader: boolean;
+  readonly: boolean;
+
   parseLineFn: (line: string) => T;
+  stringifyFn: (value: T) => string;
   randomFn: () => number;
+
   maxElementsPerCheckpoint: number;
   minElementsPerCheckpoint: number;
+
   maxRandomElementsCacheSize: number;
   initRandomElementsCacheSize: number;
+
+  maxPushedValuesBufferSize: number;
+
   enableCheckpointDownsizing: boolean;
   minAccessesBeforeDownsizing: number;
   resizeCacheHitThreshold: number;
@@ -28,15 +37,23 @@ interface InfinarrayOptions<T> {
 const DEFAULT_OPTIONS: InfinarrayOptions<any> = {
   delimiter: '\n',
   skipHeader: false,
+  readonly: true,
+
+  randomFn: Math.random,
+  parseLineFn: JSON.parse,
+  stringifyFn: JSON.stringify,
+
   maxElementsPerCheckpoint: 4096,
   minElementsPerCheckpoint: 64,
+
   maxRandomElementsCacheSize: 65536,
   initRandomElementsCacheSize: 512,
+
+  maxPushedValuesBufferSize: 1024,
+
   enableCheckpointDownsizing: true,
   minAccessesBeforeDownsizing: 15,
   resizeCacheHitThreshold: 0.5,
-  randomFn: Math.random,
-  parseLineFn: JSON.parse,
 };
 
 function clampIndex(idx: number, length: number): number | undefined {
@@ -57,6 +74,8 @@ export class Infinarray<T> {
   private filePath: string;
   private checkpoints: Checkpoint[] = [];
   private randomElementsCache: { index: number; value: T }[] = [];
+  private pushedValuesBuffer: T[] = [];
+  private maxPushedValuesBufferSize;
   private cachedChunk: { idx: number; data: any[] } | null = null;
   private ready = false;
 
@@ -73,9 +92,10 @@ export class Infinarray<T> {
   private minElementsPerCheckpoint: number;
   private maxRandomSampleSize: number;
   private randomFn: () => number;
-
+  private stringifyFn: (value: T) => string;
   private parseLine: (line: string) => T;
   private elementsPerCheckpoint: number;
+  private readonly: boolean;
 
   constructor(
     filePath: string,
@@ -89,7 +109,9 @@ export class Infinarray<T> {
 
     this.parseLine = fullConfig.parseLineFn;
     this.randomFn = fullConfig.randomFn;
+    this.stringifyFn = fullConfig.stringifyFn;
 
+    this.readonly = fullConfig.readonly;
     this.elementsPerCheckpoint = fullConfig.maxElementsPerCheckpoint;
     this.randomSampleSize = fullConfig.initRandomElementsCacheSize;
     this.delimiter = fullConfig.delimiter;
@@ -99,6 +121,8 @@ export class Infinarray<T> {
     this.resizeCacheHitThreshold = fullConfig.resizeCacheHitThreshold;
     this.minElementsPerCheckpoint = fullConfig.minElementsPerCheckpoint;
     this.maxRandomSampleSize = fullConfig.maxRandomElementsCacheSize;
+
+    this.maxPushedValuesBufferSize = fullConfig.maxPushedValuesBufferSize;
   }
 
   /**
@@ -124,6 +148,10 @@ export class Infinarray<T> {
    * Initializes and loads the array. This must be called before any array operations.
    */
   async init() {
+    if (this.ready) {
+      throw new Error('Infinarray object already initialized');
+    }
+
     await this.generateCheckpoints();
     this.ready = true;
     if (!this.isFullyInMemory()) {
@@ -165,6 +193,7 @@ export class Infinarray<T> {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
     }
+    await this.flushPushedValues();
 
     if (this.cachedChunk) {
       for (
@@ -227,6 +256,8 @@ export class Infinarray<T> {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
     }
+    await this.flushPushedValues();
+
     const filteredArray: T[] = [];
 
     if (this.isFullyInMemory() && this.cachedChunk) {
@@ -282,6 +313,8 @@ export class Infinarray<T> {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
     }
+    await this.flushPushedValues();
+
     if (fromIndex >= this.length) {
       return undefined;
     }
@@ -397,6 +430,8 @@ export class Infinarray<T> {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
     }
+    await this.flushPushedValues();
+
     let entry: { idx: number; value: T } | undefined;
     if (this.isFullyInMemory() && this.cachedChunk) {
       for (let i = 0; i < this.cachedChunk.data.length; i++) {
@@ -480,6 +515,8 @@ export class Infinarray<T> {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
     }
+    await this.flushPushedValues();
+
     if (this.isFullyInMemory() && this.cachedChunk) {
       for (let i = 0; i < this.cachedChunk.data.length; i++) {
         callbackfn.call(thisArg ?? this, this.cachedChunk.data[i], i, this);
@@ -587,6 +624,9 @@ export class Infinarray<T> {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
     }
+
+    await this.flushPushedValues();
+
     const startIdx = clampIndex(start, this.length);
     const endIdx =
       end >= this.length ? this.length : clampIndex(end, this.length);
@@ -699,6 +739,96 @@ export class Infinarray<T> {
     return (await this.sampleEntry())?.value;
   }
 
+  /**
+   * Appends new elements to the end of an array, and returns the new length of the array.
+   * Readonly mode must be disabled to use this function as this manipulates the underlying file
+   * @param items New elements to add to the array.
+   */
+  async push(...items: T[]): Promise<number> {
+    if (this.readonly) {
+      throw new Error(
+        'Infinarray is in readonly mode, objects cannot be pushed'
+      );
+    }
+
+    this.pushedValuesBuffer.push(...items);
+
+    if (this.pushedValuesBuffer.length > this.maxPushedValuesBufferSize) {
+      await this.flushPushedValues();
+    }
+
+    // Injects pushed objects into random cache through reservoir sampling
+    items.forEach((item, idx) => {
+      const rand = Math.floor(this.randomFn() * (this.arrayLength + idx));
+      if (rand < this.randomElementsCache.length) {
+        this.randomElementsCache[rand] = {
+          index: this.arrayLength + idx,
+          value: item,
+        };
+      }
+    });
+
+    // Checks if current checkpoint is the last checkpoint. If it is, then fill up
+    // this checkpoint cache with the new values
+    if (this.cachedChunk?.idx === this.checkpoints.length - 1) {
+      let i = 0;
+      while (this.cachedChunk.data.length < this.elementsPerCheckpoint) {
+        this.cachedChunk.data.push(items[i]);
+        i++;
+      }
+    }
+
+    this.arrayLength += items.length;
+    return this.length;
+  }
+
+  /**
+   * This flushes the buffer of pushed values, writing everything to the file.
+   * If data has been pushed to the Infinarray, this must be called before the
+   * Infinarray object goes out of scope, otherwise data may be lost.
+   */
+  async flushPushedValues() {
+    if (this.pushedValuesBuffer.length === 0) {
+      return;
+    }
+
+    const delimiterBuffer = Buffer.from(this.delimiter);
+    const { size } = statSync(this.filePath);
+    const startByte = size - delimiterBuffer.length;
+
+    const finalBytesBuffer = Buffer.alloc(delimiterBuffer.length);
+    const handle = await open(this.filePath, 'a+');
+    await handle.read(finalBytesBuffer, 0, delimiterBuffer.length, startByte);
+
+    const delimiterExistsAtEnd = delimiterBuffer.equals(finalBytesBuffer);
+
+    let currByteIdx = size;
+    let strToAppend = '';
+    if (!delimiterExistsAtEnd && size > 0) {
+      currByteIdx += delimiterBuffer.length;
+      strToAppend += '\n';
+    }
+
+    const lastFlushedIndex = this.length - this.pushedValuesBuffer.length;
+
+    this.pushedValuesBuffer.forEach((item, idx) => {
+      const currIdx = lastFlushedIndex + idx + 1;
+      strToAppend += this.stringifyFn(item);
+      currByteIdx += Buffer.from(strToAppend).length;
+      if (currIdx % this.elementsPerCheckpoint === 0) {
+        this.checkpoints.push({ byte: currByteIdx, index: currIdx });
+      }
+      if (idx !== this.pushedValuesBuffer.length - 1) {
+        strToAppend += this.delimiter;
+        currByteIdx += delimiterBuffer.length;
+      }
+    });
+
+    await handle.appendFile(strToAppend);
+    await handle.close();
+    this.pushedValuesBuffer = [];
+  }
+
   private async get(idx: number): Promise<T | undefined> {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
@@ -724,6 +854,12 @@ export class Infinarray<T> {
     }
 
     this.cacheMisses++;
+
+    if (this.isIndexInPushBuffer(idx)) {
+      return this.pushedValuesBuffer[
+        idx - (this.length - this.pushedValuesBuffer.length)
+      ];
+    }
 
     // If the cache success ratio dips below threshold, this rebuilds the checkpoints with half the number of rows
     if (
@@ -783,7 +919,12 @@ export class Infinarray<T> {
     return this.elementsPerCheckpoint >= this.length;
   }
 
+  private isIndexInPushBuffer(index: number) {
+    return index >= this.length - this.pushedValuesBuffer.length;
+  }
+
   private async generateCheckpoints(warmupCacheIdx = 0) {
+    await this.flushPushedValues();
     const warmupCacheCheckpointIdx = Math.floor(
       warmupCacheIdx / this.elementsPerCheckpoint
     );
@@ -819,10 +960,16 @@ export class Infinarray<T> {
 
     this.cachedChunk = { idx: warmupCacheCheckpointIdx, data: precache };
 
+    if (checkpoints.length === 0) {
+      checkpoints.push({ index: 0, byte: 0 });
+    }
+
     this.checkpoints = checkpoints;
   }
 
   private async generateRandomElementsCache() {
+    await this.flushPushedValues();
+
     const randomIdxs: {
       originalIdx: number;
       valIdx: number;

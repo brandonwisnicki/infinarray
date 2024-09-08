@@ -4,7 +4,7 @@
 
 ### Infinarray allows you to access large files as if it were an array.
 
-Call array functions like `filter` and `forEach` without having to think about streams. Infinarray caches array data to allow for fast sequential array indexing and fast random sampling.
+Call array functions like `filter` and `forEach` without having to think about streams. Infinarray caches array data to allow for fast sequential array indexing and fast random sampling. Infinarray also supports array manipulation with `push`. Supports jsonl out of the box
 
 ## Quick Start
 
@@ -33,7 +33,7 @@ Infinarray might be useful to you if
 
 - You need a layer of indirection with streams
 - You need to repeatedly open new streams for the same file
-- The contents of your array are read-only
+- You need random and sequential array reads
 
 This is my use case for building Infinarray. It is currently being used to allow users to write code working with large files without needing to constantly use streams just to get a single element from the array.
 
@@ -41,6 +41,7 @@ This is my use case for building Infinarray. It is currently being used to allow
 
 - Enjoy the low memory footprint of streams with the flexibility of in-memory arrays
 - Automatically caches elements you will likely use to prevent unnecessary file reads
+- Update the array and the underlying file through `Infinarray.push`
 - Use all the most common JS array operations you already know
 - Fully type-safe
 - Built around Node.js streams
@@ -63,6 +64,7 @@ Infinarray currently supports the following functions the standard JS Arrays.
 - `forEach`
 - `indexOf`
 - `slice`
+- `push`[\*](#writing-to-infinarray)
 
 Infinarray also has a few of its own functions to improve DX such as...
 
@@ -104,7 +106,11 @@ All configuration options are below:
 
 `parseLineFn: (line: string) => T`: Converts the text string to the generic type of the `Infinarray` object. This is called on every element split by the `delimiter` (default: `JSON.parse`)
 
+`stringifyFn: (value: T) => string`: Converts the item type into a string that can be inserted into the underlying data file. You should _not_ include the delimiter in this function as Infinarray automatically handles it already. (default: `JSON.stringify`)
+
 `randomFn: () => number`: A function that returns a value in [0, 1]. This is used for randomly sampling values (default: `Math.random`)
+
+`readonly: boolean`: When this is false, Infinarray is allowed to manipulate the contents of the array through the `push` command. (default: `true`)
 
 `maxElementsPerCheckpoint: number`: The maximum number of elements that a single checkpoint can reference. The cache stores a all of the data reference by a single checkpoint, so increasing this will increase your memory footprint. (default: `4096`)
 
@@ -114,11 +120,34 @@ All configuration options are below:
 
 `initRandomElementsCacheSize`: The initial number of elements in the random elements cache. (default: `512`)
 
+`maxPushedValuesBufferSize`: The maximum number of pushed elements that can be stored in-memory, before being flushed and written to the underlying file. (default: `1024`)
+
 `enableCheckpointDownsizing`: If enabled, the elements per checkpoint will be halved when the `cacheHitRatio` dips below the `resizeCacheHitThreshold`. When the cache hit ratio is very low, then the cache is likely not useful, and the array will be faster with smaller checkpoint sizes. (default: `true`)
 
 `minAccessesBeforeDownsizing`: The number of array accesses with `at` to allow before checking if a downsize should occur. This is important to give a fair sample size before deciding if a downsize is needed. (default: `15`)
 
 `resizeCacheHitThreshold`: The ratio that the `cacheHitRatio` must stay above to prevent downsizing. Higher values will lead to much more aggresive downsizing. Set to `0` to never downsize (default: `0.5`)
+
+## Writing to Infinarray
+
+While Infinarray supports pushing items to the array, it is essential to flush the pushed values buffer before the process exits or before the Infinarray object goes out of scope, otherwise data may be lost. If `maxPushedValuesBufferSize` is set to 0, flushing is not required, however, this will have high performance implications as a file handle is created on each push.
+
+```typescript
+import { Infinarray } from 'infinarray';
+
+const array = new Infinarray<string>('./my-big-file.txt', {
+  readonly: false,
+  maxPushedValuesBufferSize: 1024,
+});
+await array.init();
+
+await array.push('foo');
+await array.push('bar');
+await array.push(...['foo', 'bar', 'foo']);
+
+// ⚠️🚨 Don't forget to call this! 🚨⚠️
+await array.flushPushedValues();
+```
 
 ## Benchmarks
 
@@ -149,4 +178,4 @@ These are results from a machine with a Intel i7-14700K, 32GB RAM
 
 ## Contributing
 
-I am far from an expert on streams, caching, or life in general, and I'm always looking to improve this package. If you see some glaring issues or find any bugs, please file an issue on the GitHub repo. I am also open to any PRs if you are feeling generous!
+I am far from an expert on streams, caching, or life in general, and I'm always looking to improve this package. If you see some glaring issues, find a bug, or have any questions, please file an issue on the GitHub repo. I am also open to any PRs if you are feeling generous!

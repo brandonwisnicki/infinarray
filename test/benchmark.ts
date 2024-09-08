@@ -1,12 +1,12 @@
 /* eslint-disable @typescript-eslint/naming-convention */
-import { Bench, Task } from 'tinybench';
-import Infinarray from '../src';
+import { Bench } from 'tinybench';
+import { Infinarray } from '../src';
 
-const BIG_FILE_PATH = './test/data/big_file.json';
-const MEDIUM_FILE_PATH = './test/data/medium_file.json';
-const SMALL_FILE_PATH = './test/data/small_file.json';
-const TINY_FILE_PATH = './test/data/tiny_file.json';
-const EMPTY_FILE_PATH = './test/data/empty.json';
+const BIG_FILE_PATH = './test/data/big_file.jsonl';
+const MEDIUM_FILE_PATH = './test/data/medium_file.jsonl';
+const SMALL_FILE_PATH = './test/data/small_file.jsonl';
+const TINY_FILE_PATH = './test/data/tiny_file.jsonl';
+const EMPTY_FILE_PATH = './test/data/empty.jsonl';
 
 let arr: Infinarray<any> | undefined;
 let i = 0;

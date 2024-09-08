@@ -2,7 +2,7 @@ const shopifyEslintPlugin = require('@shopify/eslint-plugin');
 
 module.exports = [
   {
-    ignores: ['dist/*', 'test/data/*'],
+    ignores: ['dist/*', 'test/data/*', 'test/temp/*'],
   },
   ...shopifyEslintPlugin.configs.esnext,
   ...shopifyEslintPlugin.configs.typescript,
