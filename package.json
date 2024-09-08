@@ -11,7 +11,8 @@
   },
   "scripts": {
     "test": "tsx --test \"./test/**/*.test.ts\"",
-    "build": "npx unbuild"
+    "build": "npx unbuild",
+    "publish": "npx unbuild && npm run publish"
   },
   "engines": {
     "node": ">=20.0.0"
