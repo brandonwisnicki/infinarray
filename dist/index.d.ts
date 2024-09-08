@@ -1,12 +1,15 @@
 interface InfinarrayOptions<T> {
     delimiter: string;
     skipHeader: boolean;
+    readonly: boolean;
     parseLineFn: (line: string) => T;
+    stringifyFn: (value: T) => string;
     randomFn: () => number;
     maxElementsPerCheckpoint: number;
     minElementsPerCheckpoint: number;
     maxRandomElementsCacheSize: number;
     initRandomElementsCacheSize: number;
+    maxPushedValuesBufferSize: number;
     enableCheckpointDownsizing: boolean;
     minAccessesBeforeDownsizing: number;
     resizeCacheHitThreshold: number;
@@ -15,6 +18,8 @@ declare class Infinarray<T> {
     private filePath;
     private checkpoints;
     private randomElementsCache;
+    private pushedValuesBuffer;
+    private maxPushedValuesBufferSize;
     private cachedChunk;
     private ready;
     private cacheHits;
@@ -29,8 +34,10 @@ declare class Infinarray<T> {
     private minElementsPerCheckpoint;
     private maxRandomSampleSize;
     private randomFn;
+    private stringifyFn;
     private parseLine;
     private elementsPerCheckpoint;
+    private readonly;
     constructor(filePath: string, options?: Partial<InfinarrayOptions<T>>);
     /**
      * Gets the length of the array. This is a number one higher than the highest index in the array.
@@ -180,8 +187,21 @@ declare class Infinarray<T> {
      * Returns a random item from the array if not empty, and undefined otherwise.
      */
     sampleValue(): Promise<T | undefined>;
+    /**
+     * Appends new elements to the end of an array, and returns the new length of the array.
+     * Readonly mode must be disabled to use this function as this manipulates the underlying file
+     * @param items New elements to add to the array.
+     */
+    push(...items: T[]): Promise<number>;
+    /**
+     * This flushes the buffer of pushed values, writing everything to the file.
+     * If data has been pushed to the Infinarray, this must be called before the
+     * Infinarray object goes out of scope, otherwise data may be lost.
+     */
+    flushPushedValues(): Promise<void>;
     private get;
     private isFullyInMemory;
+    private isIndexInPushBuffer;
     private generateCheckpoints;
     private generateRandomElementsCache;
 }

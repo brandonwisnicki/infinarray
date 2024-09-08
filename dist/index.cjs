@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('fs');
+const promises$1 = require('fs/promises');
 const stream = require('stream');
 const promises = require('stream/promises');
 
@@ -95,15 +96,18 @@ const NOT_READY_ERROR = "Infinarray not initialized (Make sure to run init() bef
 const DEFAULT_OPTIONS = {
   delimiter: "\n",
   skipHeader: false,
+  readonly: true,
+  randomFn: Math.random,
+  parseLineFn: JSON.parse,
+  stringifyFn: JSON.stringify,
   maxElementsPerCheckpoint: 4096,
   minElementsPerCheckpoint: 64,
   maxRandomElementsCacheSize: 65536,
   initRandomElementsCacheSize: 512,
+  maxPushedValuesBufferSize: 1024,
   enableCheckpointDownsizing: true,
   minAccessesBeforeDownsizing: 15,
-  resizeCacheHitThreshold: 0.5,
-  randomFn: Math.random,
-  parseLineFn: JSON.parse
+  resizeCacheHitThreshold: 0.5
 };
 function clampIndex(idx, length) {
   const index = idx;
@@ -123,6 +127,8 @@ class Infinarray {
     __publicField(this, "filePath");
     __publicField(this, "checkpoints", []);
     __publicField(this, "randomElementsCache", []);
+    __publicField(this, "pushedValuesBuffer", []);
+    __publicField(this, "maxPushedValuesBufferSize");
     __publicField(this, "cachedChunk", null);
     __publicField(this, "ready", false);
     __publicField(this, "cacheHits", 0);
@@ -137,8 +143,10 @@ class Infinarray {
     __publicField(this, "minElementsPerCheckpoint");
     __publicField(this, "maxRandomSampleSize");
     __publicField(this, "randomFn");
+    __publicField(this, "stringifyFn");
     __publicField(this, "parseLine");
     __publicField(this, "elementsPerCheckpoint");
+    __publicField(this, "readonly");
     if (options.delimiter && Buffer.from(options.delimiter).length !== 1) {
       throw new Error("Delimiter must be a single byte character");
     }
@@ -146,6 +154,8 @@ class Infinarray {
     const fullConfig = { ...DEFAULT_OPTIONS, ...options };
     this.parseLine = fullConfig.parseLineFn;
     this.randomFn = fullConfig.randomFn;
+    this.stringifyFn = fullConfig.stringifyFn;
+    this.readonly = fullConfig.readonly;
     this.elementsPerCheckpoint = fullConfig.maxElementsPerCheckpoint;
     this.randomSampleSize = fullConfig.initRandomElementsCacheSize;
     this.delimiter = fullConfig.delimiter;
@@ -155,6 +165,7 @@ class Infinarray {
     this.resizeCacheHitThreshold = fullConfig.resizeCacheHitThreshold;
     this.minElementsPerCheckpoint = fullConfig.minElementsPerCheckpoint;
     this.maxRandomSampleSize = fullConfig.maxRandomElementsCacheSize;
+    this.maxPushedValuesBufferSize = fullConfig.maxPushedValuesBufferSize;
   }
   /**
    * Gets the length of the array. This is a number one higher than the highest index in the array.
@@ -176,6 +187,9 @@ class Infinarray {
    * Initializes and loads the array. This must be called before any array operations.
    */
   async init() {
+    if (this.ready) {
+      throw new Error("Infinarray object already initialized");
+    }
     await this.generateCheckpoints();
     this.ready = true;
     if (!this.isFullyInMemory()) {
@@ -210,6 +224,7 @@ class Infinarray {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
     }
+    await this.flushPushedValues();
     if (this.cachedChunk) {
       for (let i = this.cachedChunk.idx; i < this.cachedChunk.idx + this.cachedChunk.data.length; i++) {
         if (!predicate.call(thisArg ?? this, this.cachedChunk.data[i], i, this))
@@ -262,6 +277,7 @@ class Infinarray {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
     }
+    await this.flushPushedValues();
     const filteredArray = [];
     if (this.isFullyInMemory() && this.cachedChunk) {
       for (let i = 0; i < this.cachedChunk.data.length; i++) {
@@ -305,6 +321,7 @@ class Infinarray {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
     }
+    await this.flushPushedValues();
     if (fromIndex >= this.length) {
       return void 0;
     }
@@ -400,6 +417,7 @@ class Infinarray {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
     }
+    await this.flushPushedValues();
     let entry;
     if (this.isFullyInMemory() && this.cachedChunk) {
       for (let i = 0; i < this.cachedChunk.data.length; i++) {
@@ -468,6 +486,7 @@ class Infinarray {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
     }
+    await this.flushPushedValues();
     if (this.isFullyInMemory() && this.cachedChunk) {
       for (let i = 0; i < this.cachedChunk.data.length; i++) {
         callbackfn.call(thisArg ?? this, this.cachedChunk.data[i], i, this);
@@ -558,6 +577,7 @@ class Infinarray {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
     }
+    await this.flushPushedValues();
     const startIdx = clampIndex(start, this.length);
     const endIdx = end >= this.length ? this.length : clampIndex(end, this.length);
     if (startIdx == null || endIdx == null || endIdx <= startIdx) {
@@ -648,6 +668,79 @@ class Infinarray {
   async sampleValue() {
     return (await this.sampleEntry())?.value;
   }
+  /**
+   * Appends new elements to the end of an array, and returns the new length of the array.
+   * Readonly mode must be disabled to use this function as this manipulates the underlying file
+   * @param items New elements to add to the array.
+   */
+  async push(...items) {
+    if (this.readonly) {
+      throw new Error(
+        "Infinarray is in readonly mode, objects cannot be pushed"
+      );
+    }
+    this.pushedValuesBuffer.push(...items);
+    if (this.pushedValuesBuffer.length > this.maxPushedValuesBufferSize) {
+      await this.flushPushedValues();
+    }
+    items.forEach((item, idx) => {
+      const rand = Math.floor(this.randomFn() * (this.arrayLength + idx));
+      if (rand < this.randomElementsCache.length) {
+        this.randomElementsCache[rand] = {
+          index: this.arrayLength + idx,
+          value: item
+        };
+      }
+    });
+    if (this.cachedChunk?.idx === this.checkpoints.length - 1) {
+      let i = 0;
+      while (this.cachedChunk.data.length < this.elementsPerCheckpoint) {
+        this.cachedChunk.data.push(items[i]);
+        i++;
+      }
+    }
+    this.arrayLength += items.length;
+    return this.length;
+  }
+  /**
+   * This flushes the buffer of pushed values, writing everything to the file.
+   * If data has been pushed to the Infinarray, this must be called before the
+   * Infinarray object goes out of scope, otherwise data may be lost.
+   */
+  async flushPushedValues() {
+    if (this.pushedValuesBuffer.length === 0) {
+      return;
+    }
+    const delimiterBuffer = Buffer.from(this.delimiter);
+    const { size } = fs.statSync(this.filePath);
+    const startByte = size - delimiterBuffer.length;
+    const finalBytesBuffer = Buffer.alloc(delimiterBuffer.length);
+    const handle = await promises$1.open(this.filePath, "a+");
+    await handle.read(finalBytesBuffer, 0, delimiterBuffer.length, startByte);
+    const delimiterExistsAtEnd = delimiterBuffer.equals(finalBytesBuffer);
+    let currByteIdx = size;
+    let strToAppend = "";
+    if (!delimiterExistsAtEnd && size > 0) {
+      currByteIdx += delimiterBuffer.length;
+      strToAppend += "\n";
+    }
+    const lastFlushedIndex = this.length - this.pushedValuesBuffer.length;
+    this.pushedValuesBuffer.forEach((item, idx) => {
+      const currIdx = lastFlushedIndex + idx + 1;
+      strToAppend += this.stringifyFn(item);
+      currByteIdx += Buffer.from(strToAppend).length;
+      if (currIdx % this.elementsPerCheckpoint === 0) {
+        this.checkpoints.push({ byte: currByteIdx, index: currIdx });
+      }
+      if (idx !== this.pushedValuesBuffer.length - 1) {
+        strToAppend += this.delimiter;
+        currByteIdx += delimiterBuffer.length;
+      }
+    });
+    await handle.appendFile(strToAppend);
+    await handle.close();
+    this.pushedValuesBuffer = [];
+  }
   async get(idx) {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
@@ -667,6 +760,9 @@ class Infinarray {
       );
     }
     this.cacheMisses++;
+    if (this.isIndexInPushBuffer(idx)) {
+      return this.pushedValuesBuffer[idx - (this.length - this.pushedValuesBuffer.length)];
+    }
     if (this.enableCheckpointResizing && this.cacheHits + this.cacheMisses > this.minTriesBeforeResizing && this.cacheHitRatio < this.resizeCacheHitThreshold && this.elementsPerCheckpoint !== this.minElementsPerCheckpoint) {
       this.elementsPerCheckpoint = Math.max(
         this.minElementsPerCheckpoint,
@@ -706,7 +802,11 @@ class Infinarray {
   isFullyInMemory() {
     return this.elementsPerCheckpoint >= this.length;
   }
+  isIndexInPushBuffer(index) {
+    return index >= this.length - this.pushedValuesBuffer.length;
+  }
   async generateCheckpoints(warmupCacheIdx = 0) {
+    await this.flushPushedValues();
     const warmupCacheCheckpointIdx = Math.floor(
       warmupCacheIdx / this.elementsPerCheckpoint
     );
@@ -734,9 +834,13 @@ class Infinarray {
       })
     );
     this.cachedChunk = { idx: warmupCacheCheckpointIdx, data: precache };
+    if (checkpoints.length === 0) {
+      checkpoints.push({ index: 0, byte: 0 });
+    }
     this.checkpoints = checkpoints;
   }
   async generateRandomElementsCache() {
+    await this.flushPushedValues();
     const randomIdxs = [];
     for (let i = 0; i < this.randomSampleSize; i++) {
       randomIdxs.push({
