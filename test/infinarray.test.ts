@@ -12,12 +12,17 @@ const TINY_FILE_PATH = './test/data/tiny_file.jsonl';
 const EMPTY_FILE_PATH = './test/data/empty.jsonl';
 
 const TEMP_PATH = './test/temp';
+const TEMP_MAP_PATH = './test/temp/mapped';
 
 const clearTempFolder = () => {
   if (!existsSync(TEMP_PATH)) {
     mkdirSync(TEMP_PATH);
   }
+
   rmSync(TEMP_PATH, { recursive: true, force: true });
+  if (!existsSync(TEMP_MAP_PATH)) {
+    mkdirSync(TEMP_MAP_PATH, { recursive: true });
+  }
 };
 
 const createWritableFileCopy = (path: string, testName: string) => {
@@ -28,7 +33,64 @@ const createWritableFileCopy = (path: string, testName: string) => {
 
 suite('infinarray', () => {
   before(clearTempFolder);
-  suite('writable array', () => {
+
+  suite('writeable array map', () => {
+    test('map empty array', async () => {
+      const name = 'map-empty';
+      const arr = new Infinarray<string[]>(
+        createWritableFileCopy(EMPTY_FILE_PATH, name),
+        {
+          readonly: false,
+        }
+      );
+      await arr.init();
+
+      await arr.map(`${TEMP_MAP_PATH}/${name}.jsonl`, (val) => val[1]);
+    });
+
+    test('map to 2nd element medium', async () => {
+      const name = 'map-2nd-el-medium';
+      const arr = new Infinarray<string[]>(
+        createWritableFileCopy(MEDIUM_FILE_PATH, name),
+        {
+          readonly: false,
+        }
+      );
+      await arr.init();
+
+      await arr.map(`${TEMP_MAP_PATH}/${name}.jsonl`, (val) => val[1]);
+    });
+
+    test('different delimiter', async () => {
+      const name = 'map-diff-delim';
+      const arr = new Infinarray<string[]>(
+        createWritableFileCopy(MEDIUM_FILE_PATH, name),
+        {
+          readonly: false,
+        }
+      );
+      await arr.init();
+
+      await arr.map(`${TEMP_MAP_PATH}/${name}.jsonl`, (val) => val[1], {
+        delimiter: ',',
+      });
+    });
+
+    test('map idx', async () => {
+      const name = 'map-idx';
+      const arr = new Infinarray<string[]>(
+        createWritableFileCopy(MEDIUM_FILE_PATH, name),
+        {
+          readonly: false,
+        }
+      );
+      await arr.init();
+
+      await arr.map(`${TEMP_MAP_PATH}/${name}.jsonl`, (val, idx) => idx);
+    });
+  });
+
+  suite('writable array push', () => {
     test('empty file push', async () => {
       const arr = new Infinarray<string[]>(
         createWritableFileCopy(EMPTY_FILE_PATH, 'push-and-get-empty'),

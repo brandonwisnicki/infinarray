@@ -4,7 +4,7 @@
 
 ### Infinarray allows you to access large files as if it were an array.
 
-Call array functions like `filter` and `forEach` without having to think about streams. Infinarray caches array data to allow for fast sequential array indexing and fast random sampling. Infinarray also supports array manipulation with `push`. Supports jsonl out of the box
+Call array functions like `filter` and `forEach` without having to think about streams. Infinarray caches array data to allow for fast sequential array indexing and fast random sampling. Infinarray also supports array manipulation with `push` and `map`. Supports [jsonl](https://jsonlines.org/) out of the box
 
 ## Quick Start
 
@@ -65,6 +65,7 @@ Infinarray currently supports the following functions the standard JS Arrays.
 - `indexOf`
 - `slice`
 - `push`[\*](#writing-to-infinarray)
+- `map`
 
 Infinarray also has a few of its own functions to improve DX such as...
 
@@ -135,7 +136,7 @@ While Infinarray supports pushing items to the array, it is essential to flush t
 ```typescript
 import { Infinarray } from 'infinarray';
 
-const array = new Infinarray<string>('./my-big-file.txt', {
+const array = new Infinarray<string>('./my-big-file.jsonl', {
   readonly: false,
   maxPushedValuesBufferSize: 1024,
 });
@@ -148,6 +149,17 @@ await array.push(...['foo', 'bar', 'foo']);
 // ⚠️🚨 Don't forget to call this! 🚨⚠️
 await array.flushPushedValues();
 ```
+
+This package also supports creating brand new array files through `Infinarray.map`. This does not require flushing as it does not use the buffer.
+
+```typescript
+await arr.map(`my-new-array.jsonl`, (val, idx) => `${idx}) ${val}`, {
+  delimiter: '\n', // default
+  stringifyFn: JSON.stringify, // default
+});
+```
+
+To work with this new array, you must create a new Infinarray object pointing to this path
 
 ## Benchmarks
 

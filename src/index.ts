@@ -1,6 +1,12 @@
-import { createReadStream, readFileSync, readSync, statSync } from 'fs';
+import {
+  createReadStream,
+  createWriteStream,
+  readFileSync,
+  readSync,
+  statSync,
+} from 'fs';
 import { open } from 'fs/promises';
-import { Writable } from 'stream';
+import { Transform, Writable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { getLines } from './lines';
 
@@ -224,7 +230,7 @@ export class Infinarray<T> {
           objectMode: true,
           write: (chunk, _, callback) => {
             const parsed = this.parseLine(chunk.line);
-            if (!predicate.call(this, parsed, idx, this)) {
+            if (!predicate.call(thisArg ?? this, parsed, idx, this)) {
               returnValue = false;
               setImmediate(() => ac.abort(falsePredicateError));
               return callback();
@@ -283,7 +289,7 @@ export class Infinarray<T> {
         objectMode: true,
         write: (chunk, _, callback) => {
           const parsed = this.parseLine(chunk.line);
-          if (predicate.call(thisArg, parsed, idx, this)) {
+          if (predicate.call(thisArg ?? this, parsed, idx, this)) {
             filteredArray.push(parsed);
           }
           idx++;
@@ -354,7 +360,10 @@ export class Infinarray<T> {
           write: (chunk, _, callback) => {
             if (idx >= startIndex) {
               const parsed = this.parseLine(chunk.line);
-              if (!entry && predicate.call(this, parsed, idx, this)) {
+              if (
+                !entry &&
+                predicate.call(thisArg ?? this, parsed, idx, this)
+              ) {
                 entry = { idx, value: parsed };
                 setImmediate(() => ac.abort(entryFound));
                 return callback();
@@ -454,7 +463,7 @@ export class Infinarray<T> {
         objectMode: true,
         write: (chunk, _, callback) => {
           const parsed = this.parseLine(chunk.line);
-          if (predicate.call(this, parsed, idx, this)) {
+          if (predicate.call(thisArg ?? this, parsed, idx, this)) {
             entry = { idx, value: parsed };
           }
           idx++;
@@ -534,7 +543,7 @@ export class Infinarray<T> {
         objectMode: true,
         write: (chunk, _, callback) => {
           const parsed = this.parseLine(chunk.line);
-          callbackfn.call(this, parsed, idx, this);
+          callbackfn.call(thisArg ?? this, parsed, idx, this);
           idx++;
           return callback();
         },
@@ -691,9 +700,6 @@ export class Infinarray<T> {
    * Returns a random index from the array if not empty, and -1 otherwise.
    */
   sampleIndex() {
-    if (!this.ready) {
-      throw new Error(NOT_READY_ERROR);
-    }
     if (this.length === 0) {
       return -1;
     }
@@ -737,6 +743,57 @@ export class Infinarray<T> {
    */
   async sampleValue(): Promise<T | undefined> {
     return (await this.sampleEntry())?.value;
+  }
+
+  /**
+   * Calls a defined callback function on each element of an array, and writes an array to a file that contains the results.
+   * @param filePath The file path to write the new mapped data to
+   * @param callbackfn A function that accepts up to three arguments. The map method calls the callbackfn function one time for each element in the array.
+   * @param thisArg An object to which the this keyword can refer in the callbackfn function. If thisArg is omitted, undefined is used as the this value.
+   */
+  // eslint-disable-next-line @typescript-eslint/naming-convention
+  async map<U>(
+    filePath: string,
+    callbackfn: (value: T, index: number, array: Infinarray<T>) => U,
+    options?: Partial<{
+      stringifyFn: (value: U) => string;
+      delimiter: string;
+    }>,
+    thisArg?: any
+  ) {
+    if (!this.ready) {
+      throw new Error(NOT_READY_ERROR);
+    }
+
+    const defaultOptions = {
+      stringifyFn: JSON.stringify,
+      delimiter: this.delimiter,
+    };
+    const fullOptions = { ...defaultOptions, ...options };
+
+    await this.flushPushedValues();
+
+    const readStream = createReadStream(this.filePath);
+    const linesAndBytes = getLines(this.delimiter, this.skipHeader);
+    const writeStream = createWriteStream(filePath);
+    let idx = 0;
+    await pipeline(
+      readStream,
+      linesAndBytes,
+      new Transform({
+        objectMode: true,
+        transform: (chunk, _, callback) => {
+          const parsed = this.parseLine(chunk.line);
+          const ret =
+            fullOptions.stringifyFn(
+              callbackfn.call(thisArg ?? this, parsed, idx, this)
+            ) + fullOptions.delimiter;
+          idx++;
+          return callback(null, ret);
+        },
+      }),
+      writeStream
+    );
   }
 
   /**
