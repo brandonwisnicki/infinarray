@@ -104,6 +104,7 @@ suite('infinarray', () => {
       const elToPush = ['Penguin', 'Monkey', 'Dolphin'];
       const length = await arr.push(elToPush);
 
+      assert.deepStrictEqual(arr['cachedChunk']?.data.length, 1);
       assert.deepStrictEqual(await arr.at(0), elToPush);
       assert.deepStrictEqual(length, 1);
 

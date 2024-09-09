@@ -829,7 +829,10 @@ export class Infinarray<T> {
     // this checkpoint cache with the new values
     if (this.cachedChunk?.idx === this.checkpoints.length - 1) {
       let i = 0;
-      while (this.cachedChunk.data.length < this.elementsPerCheckpoint) {
+      while (
+        i < items.length &&
+        this.cachedChunk.data.length < this.elementsPerCheckpoint
+      ) {
         this.cachedChunk.data.push(items[i]);
         i++;
       }
