@@ -3,6 +3,28 @@ import { open } from 'fs/promises';
 import { Transform, Writable } from 'stream';
 import { pipeline } from 'stream/promises';
 
+function clampIndex(index, length) {
+  const idx = index;
+  if (-length <= idx && idx < 0) {
+    return idx + length;
+  }
+  if (idx < -length) {
+    return 0;
+  }
+  if (idx >= length) {
+    return void 0;
+  }
+  return idx;
+}
+function sameValueZero(x, y) {
+  if (typeof x === "number" && typeof y === "number") {
+    return x === y || x !== x && y !== y;
+  }
+  return x === y;
+}
+class InfinarrayBase {
+}
+
 const nextSplitPatternIdx = (buf, offset, bytesToMatch) => {
   if (offset >= buf.length)
     return -1;
@@ -55,7 +77,11 @@ const getLines = (splitString = "\n", skipFirstLine = false) => {
           if (lastSplitIdx !== splitCharIdx) {
             const line = buffer.subarray(lastSplitIdx, splitCharIdx);
             if (firstLineSkipped) {
-              this.push({ idx: currIdx++, byteIdx: numberBytes, line });
+              this.push({
+                idx: currIdx++,
+                byteIdx: numberBytes,
+                line: line.toString("utf8")
+              });
             } else {
               firstLineSkipped = true;
             }
@@ -73,7 +99,11 @@ const getLines = (splitString = "\n", skipFirstLine = false) => {
     flush(cb) {
       if (buffered && buffered.length > 0) {
         if (firstLineSkipped) {
-          this.push({ idx: currIdx++, byteIdx: numberBytes, line: buffered });
+          this.push({
+            idx: currIdx++,
+            byteIdx: numberBytes,
+            line: Buffer.from(buffered).toString("utf8")
+          });
         } else {
           firstLineSkipped = true;
         }
@@ -84,10 +114,10 @@ const getLines = (splitString = "\n", skipFirstLine = false) => {
   });
 };
 
-var __defProp = Object.defineProperty;
-var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
-var __publicField = (obj, key, value) => {
-  __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+var __defProp$1 = Object.defineProperty;
+var __defNormalProp$1 = (obj, key, value) => key in obj ? __defProp$1(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField$1 = (obj, key, value) => {
+  __defNormalProp$1(obj, typeof key !== "symbol" ? key + "" : key, value);
   return value;
 };
 const NOT_READY_ERROR = "Infinarray not initialized (Make sure to run init() before other functions)";
@@ -107,44 +137,37 @@ const DEFAULT_OPTIONS = {
   minAccessesBeforeDownsizing: 15,
   resizeCacheHitThreshold: 0.5
 };
-function clampIndex(idx, length) {
-  const index = idx;
-  if (-length <= index && index < 0) {
-    return index + length;
-  }
-  if (index < -length) {
-    return 0;
-  }
-  if (index >= length) {
-    return void 0;
-  }
-  return index;
-}
-class Infinarray {
+class Infinarray extends InfinarrayBase {
   constructor(filePath, options = DEFAULT_OPTIONS) {
-    __publicField(this, "filePath");
-    __publicField(this, "checkpoints", []);
-    __publicField(this, "randomElementsCache", []);
-    __publicField(this, "pushedValuesBuffer", []);
-    __publicField(this, "maxPushedValuesBufferSize");
-    __publicField(this, "cachedChunk", null);
-    __publicField(this, "ready", false);
-    __publicField(this, "cacheHits", 0);
-    __publicField(this, "cacheMisses", 0);
-    __publicField(this, "arrayLength", 0);
-    __publicField(this, "randomSampleSize");
-    __publicField(this, "delimiter");
-    __publicField(this, "skipHeader");
-    __publicField(this, "enableCheckpointResizing");
-    __publicField(this, "minTriesBeforeResizing");
-    __publicField(this, "resizeCacheHitThreshold");
-    __publicField(this, "minElementsPerCheckpoint");
-    __publicField(this, "maxRandomSampleSize");
-    __publicField(this, "randomFn");
-    __publicField(this, "stringifyFn");
-    __publicField(this, "parseLine");
-    __publicField(this, "elementsPerCheckpoint");
-    __publicField(this, "readonly");
+    super();
+    /**
+     * Enables readonly mode for the object.
+     * In readonly mode, the underlying array file cannot be changed.
+     * This must be false to use the `push` function
+     */
+    __publicField$1(this, "readonly");
+    __publicField$1(this, "filePath");
+    __publicField$1(this, "checkpoints", []);
+    __publicField$1(this, "randomElementsCache", []);
+    __publicField$1(this, "pushedValuesBuffer", []);
+    __publicField$1(this, "maxPushedValuesBufferSize");
+    __publicField$1(this, "cachedChunk", null);
+    __publicField$1(this, "ready", false);
+    __publicField$1(this, "cacheHits", 0);
+    __publicField$1(this, "cacheMisses", 0);
+    __publicField$1(this, "arrayLength", 0);
+    __publicField$1(this, "randomSampleSize");
+    __publicField$1(this, "delimiter");
+    __publicField$1(this, "skipHeader");
+    __publicField$1(this, "enableCheckpointResizing");
+    __publicField$1(this, "minTriesBeforeResizing");
+    __publicField$1(this, "resizeCacheHitThreshold");
+    __publicField$1(this, "minElementsPerCheckpoint");
+    __publicField$1(this, "maxRandomSampleSize");
+    __publicField$1(this, "randomFn");
+    __publicField$1(this, "stringifyFn");
+    __publicField$1(this, "parseLine");
+    __publicField$1(this, "elementsPerCheckpoint");
     if (options.delimiter && Buffer.from(options.delimiter).length !== 1) {
       throw new Error("Delimiter must be a single byte character");
     }
@@ -165,15 +188,9 @@ class Infinarray {
     this.maxRandomSampleSize = fullConfig.maxRandomElementsCacheSize;
     this.maxPushedValuesBufferSize = fullConfig.maxPushedValuesBufferSize;
   }
-  /**
-   * Gets the length of the array. This is a number one higher than the highest index in the array.
-   */
   get length() {
     return this.arrayLength;
   }
-  /**
-   * Gets the fraction of successful cache hits over the number of total accesses
-   */
   get cacheHitRatio() {
     const totalCacheChecks = this.cacheMisses + this.cacheHits;
     if (totalCacheChecks === 0) {
@@ -194,10 +211,6 @@ class Infinarray {
       await this.generateRandomElementsCache();
     }
   }
-  /**
-   * Returns the item located at the specified index.
-   * @param index The zero-based index of the desired code unit. A negative index will count back from the last item.
-   */
   async at(index) {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
@@ -210,14 +223,6 @@ class Infinarray {
     }
     return this.get(index);
   }
-  /**
-   * Determines whether all the members of an array satisfy the specified test.
-   * @param predicate A function that accepts up to three arguments. The every method calls
-   * the predicate function for each element in the array until the predicate returns a value
-   * which is coercible to the Boolean value false, or until the end of the array.
-   * @param thisArg An object to which the this keyword can refer in the predicate function.
-   * If thisArg is omitted, undefined is used as the this value.
-   */
   async every(predicate, thisArg) {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
@@ -266,11 +271,6 @@ class Infinarray {
       throw err;
     }
   }
-  /**
-   * Returns the elements of an array that meet the condition specified in a callback function.
-   * @param predicate A function that accepts up to three arguments. The filter method calls the predicate function one time for each element in the array.
-   * @param thisArg An object to which the this keyword can refer in the predicate function. If thisArg is omitted, undefined is used as the this value.
-   */
   async filter(predicate, thisArg) {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
@@ -305,16 +305,6 @@ class Infinarray {
     );
     return filteredArray;
   }
-  /**
-   * Returns the entry of the first element in the array where predicate is true, and undefined
-   * otherwise.
-   * @param predicate find calls predicate once for each element of the array, in ascending
-   * order, until it finds one where predicate returns true. If such an element is found, find
-   * immediately returns that element value. Otherwise, find returns undefined.
-   * @param thisArg If provided, it will be used as the this value for each invocation of
-   * predicate. If it is not provided, undefined is used instead.
-   * @param fromIndex The position in this array at which to begin searching for entries.
-   */
   async findFirstEntry(predicate, thisArg, fromIndex = 0) {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
@@ -327,7 +317,7 @@ class Infinarray {
     if (this.isFullyInMemory() && this.cachedChunk) {
       for (let i = startIndex; i < this.cachedChunk.data.length; i++) {
         if (predicate.call(thisArg ?? this, this.cachedChunk.data[i], i, this)) {
-          return { idx: i, value: this.cachedChunk.data[i] };
+          return { index: i, value: this.cachedChunk.data[i] };
         }
       }
       return void 0;
@@ -352,7 +342,7 @@ class Infinarray {
             if (idx >= startIndex) {
               const parsed = this.parseLine(chunk.line);
               if (!entry && predicate.call(thisArg ?? this, parsed, idx, this)) {
-                entry = { idx, value: parsed };
+                entry = { index: idx, value: parsed };
                 setImmediate(() => ac.abort(entryFound));
                 return callback();
               }
@@ -371,46 +361,18 @@ class Infinarray {
       throw err;
     }
   }
-  /**
-   * Returns the value of the first element in the array where predicate is true, and undefined
-   * otherwise.
-   * @param predicate find calls predicate once for each element of the array, in ascending
-   * order, until it finds one where predicate returns true. If such an element is found, find
-   * immediately returns that element value. Otherwise, find returns undefined.
-   * @param thisArg If provided, it will be used as the this value for each invocation of
-   * predicate. If it is not provided, undefined is used instead.
-   */
   async find(predicate, thisArg) {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
     }
     return (await this.findFirstEntry(predicate, thisArg))?.value;
   }
-  /**
-   * Returns the index of the first element in the array where predicate is true, and -1
-   * otherwise.
-   * @param predicate find calls predicate once for each element of the array, in ascending
-   * order, until it finds one where predicate returns true. If such an element is found,
-   * findIndex immediately returns that element index. Otherwise, findIndex returns -1.
-   * @param thisArg If provided, it will be used as the this value for each invocation of
-   * predicate. If it is not provided, undefined is used instead.
-   */
   async findIndex(predicate, thisArg) {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
     }
-    return (await this.findFirstEntry(predicate, thisArg))?.idx ?? -1;
+    return (await this.findFirstEntry(predicate, thisArg))?.index ?? -1;
   }
-  /**
-   * Returns the entry of the last element in the array where predicate is true, and undefined
-   * otherwise.
-   * @param predicate findLastEntry calls predicate once for each element of the array, in ascending
-   * order. findLastEntry returns the last entry that returned true for the predicate.
-   * Otherwise, find returns undefined.
-   * @param thisArg If provided, it will be used as the this value for each invocation of
-   * predicate. If it is not provided, undefined is used instead.
-   * @param fromIndex The position in this array at which to begin searching for entries.
-   */
   async findLastEntry(predicate, thisArg) {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
@@ -420,7 +382,7 @@ class Infinarray {
     if (this.isFullyInMemory() && this.cachedChunk) {
       for (let i = 0; i < this.cachedChunk.data.length; i++) {
         if (predicate.call(thisArg ?? this, this.cachedChunk.data[i], i, this)) {
-          entry = { idx: i, value: this.cachedChunk.data[i] };
+          entry = { index: i, value: this.cachedChunk.data[i] };
         }
       }
       return entry;
@@ -436,7 +398,7 @@ class Infinarray {
         write: (chunk, _, callback) => {
           const parsed = this.parseLine(chunk.line);
           if (predicate.call(thisArg ?? this, parsed, idx, this)) {
-            entry = { idx, value: parsed };
+            entry = { index: idx, value: parsed };
           }
           idx++;
           return callback();
@@ -445,41 +407,18 @@ class Infinarray {
     );
     return entry;
   }
-  /**
-   * Returns the value of the last element in the array where predicate is true, and undefined
-   * otherwise.
-   * @param predicate findLast calls predicate once for each element of the array, in ascending
-   * order. findLast returns the last value that returned true for the predicate.
-   * Otherwise, find returns undefined.
-   * @param thisArg If provided, it will be used as the this value for each invocation of
-   * predicate. If it is not provided, undefined is used instead.
-   */
   async findLast(predicate, thisArg) {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
     }
     return (await this.findLastEntry(predicate, thisArg))?.value;
   }
-  /**
-   * Returns the index of the last element in the array where predicate is true, and undefined
-   * otherwise.
-   * @param predicate findLastIndex calls predicate once for each element of the array, in ascending
-   * order. findLastIndex returns the last index that returned true for the predicate.
-   * Otherwise, find returns -1.
-   * @param thisArg If provided, it will be used as the this value for each invocation of
-   * predicate. If it is not provided, undefined is used instead.
-   */
   async findLastIndex(predicate, thisArg) {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
     }
-    return (await this.findLastEntry(predicate, thisArg))?.idx ?? -1;
+    return (await this.findLastEntry(predicate, thisArg))?.index ?? -1;
   }
-  /**
-   * Performs the specified action for each element in an array.
-   * @param callbackfn  A function that accepts up to three arguments. forEach calls the callbackfn function one time for each element in the array.
-   * @param thisArg  An object to which the this keyword can refer in the callbackfn function. If thisArg is omitted, undefined is used as the this value.
-   */
   async forEach(callbackfn, thisArg) {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
@@ -508,34 +447,15 @@ class Infinarray {
       })
     );
   }
-  /**
-   * Determines whether the specified callback function returns true for any element of an array.
-   * @param predicate A function that accepts up to three arguments. The some method calls
-   * the predicate function for each element in the array until the predicate returns a value
-   * which is coercible to the Boolean value true, or until the end of the array.
-   * @param thisArg An object to which the this keyword can refer in the predicate function.
-   * If thisArg is omitted, undefined is used as the this value.
-   */
   async some(predicate, thisArg) {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
     }
     return await this.find(predicate, thisArg) != null;
   }
-  /**
-   * Determines whether an array includes a certain element, returning true or false as appropriate.
-   * @param searchElement The element to search for.
-   * @param fromIndex The position in this array at which to begin searching for searchElement.
-   */
   async includes(searchElement, fromIndex = 0) {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
-    }
-    function sameValueZero(x, y) {
-      if (typeof x === "number" && typeof y === "number") {
-        return x === y || x !== x && y !== y;
-      }
-      return x === y;
     }
     const from = clampIndex(fromIndex, this.length);
     if (from == null) {
@@ -547,11 +467,6 @@ class Infinarray {
       from
     ) != null;
   }
-  /**
-   * Returns the index of the first occurrence of a value in an array, or -1 if it is not present.
-   * @param searchElement The value to locate in the array.
-   * @param fromIndex The array index at which to begin the search. If fromIndex is omitted, the search starts at index 0.
-   */
   async indexOf(searchElement, fromIndex = 0) {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
@@ -564,13 +479,8 @@ class Infinarray {
       (val) => val === searchElement,
       void 0,
       from
-    ))?.idx ?? -1;
+    ))?.index ?? -1;
   }
-  /**
-   * Returns a section of an array.
-   * @param start The beginning of the specified portion of the array.
-   * @param end The end of the specified portion of the array. This is exclusive of the element at the index 'end'.
-   */
   async slice(start = 0, end = this.length) {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
@@ -625,18 +535,12 @@ class Infinarray {
       throw err;
     }
   }
-  /**
-   * Returns a random index from the array if not empty, and -1 otherwise.
-   */
   sampleIndex() {
     if (this.length === 0) {
       return -1;
     }
     return Math.floor(this.randomFn() * this.length);
   }
-  /**
-   * Returns a random entry from the array if not empty, and undefined otherwise.
-   */
   async sampleEntry() {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
@@ -657,9 +561,6 @@ class Infinarray {
     }
     return this.randomElementsCache.pop();
   }
-  /**
-   * Returns a random item from the array if not empty, and undefined otherwise.
-   */
   async sampleValue() {
     return (await this.sampleEntry())?.value;
   }
@@ -727,7 +628,7 @@ class Infinarray {
     });
     if (this.cachedChunk?.idx === this.checkpoints.length - 1) {
       let i = 0;
-      while (this.cachedChunk.data.length < this.elementsPerCheckpoint) {
+      while (i < items.length && this.cachedChunk.data.length < this.elementsPerCheckpoint) {
         this.cachedChunk.data.push(items[i]);
         i++;
       }
@@ -900,4 +801,160 @@ class Infinarray {
   }
 }
 
-export { Infinarray };
+var __defProp = Object.defineProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __publicField = (obj, key, value) => {
+  __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+  return value;
+};
+class InfinarrayView extends InfinarrayBase {
+  constructor(array, mapFn) {
+    super();
+    __publicField(this, "materialArray");
+    __publicField(this, "mapFn");
+    this.materialArray = array;
+    this.mapFn = mapFn;
+  }
+  get length() {
+    return this.materialArray.length;
+  }
+  get cacheHitRatio() {
+    return this.materialArray.cacheHitRatio;
+  }
+  async at(index) {
+    const val = await this.materialArray.at(index);
+    if (val !== void 0) {
+      return this.mapFn(val);
+    }
+    return void 0;
+  }
+  every(predicate, thisArg) {
+    return this.materialArray.every(
+      (value, index) => predicate(this.mapFn(value), index, this),
+      thisArg
+    );
+  }
+  async filter(predicate, thisArg) {
+    const arr = await this.materialArray.filter(
+      (value, index) => predicate(this.mapFn(value), index, this),
+      thisArg
+    );
+    return arr.map(this.mapFn);
+  }
+  async findFirstEntry(predicate, thisArg, fromIndex) {
+    const firstEntry = await this.materialArray.findFirstEntry(
+      (value, index) => predicate(this.mapFn(value), index, this),
+      thisArg,
+      fromIndex
+    );
+    if (firstEntry) {
+      return { index: firstEntry.index, value: this.mapFn(firstEntry.value) };
+    } else {
+      return void 0;
+    }
+  }
+  async find(predicate, thisArg) {
+    const val = await this.materialArray.find(
+      (value, index) => predicate(this.mapFn(value), index, this),
+      thisArg
+    );
+    if (val) {
+      return this.mapFn(val);
+    } else {
+      return void 0;
+    }
+  }
+  findIndex(predicate, thisArg) {
+    return this.materialArray.findIndex(
+      (value, index) => predicate(this.mapFn(value), index, this),
+      thisArg
+    );
+  }
+  async findLastEntry(predicate, thisArg) {
+    const lastEntry = await this.materialArray.findLastEntry(
+      (value, index) => predicate(this.mapFn(value), index, this),
+      thisArg
+    );
+    if (lastEntry) {
+      return { index: lastEntry.index, value: this.mapFn(lastEntry.value) };
+    } else {
+      return void 0;
+    }
+  }
+  async findLast(predicate, thisArg) {
+    const val = await this.materialArray.findLast(
+      (value, index) => predicate(this.mapFn(value), index, this),
+      thisArg
+    );
+    if (val) {
+      return this.mapFn(val);
+    } else {
+      return void 0;
+    }
+  }
+  findLastIndex(predicate, thisArg) {
+    return this.materialArray.findLastIndex(
+      (value, index) => predicate(this.mapFn(value), index, this),
+      thisArg
+    );
+  }
+  async forEach(callbackfn, thisArg) {
+    this.materialArray.forEach(
+      (value, index) => callbackfn(this.mapFn(value), index, this),
+      thisArg
+    );
+  }
+  some(predicate, thisArg) {
+    return this.materialArray.some(
+      (value, index) => predicate(this.mapFn(value), index, this),
+      thisArg
+    );
+  }
+  async includes(searchElement, fromIndex = 0) {
+    const from = clampIndex(fromIndex, this.length);
+    if (from == null) {
+      return false;
+    }
+    return await this.materialArray.findFirstEntry(
+      (val) => sameValueZero(this.mapFn(val), searchElement),
+      void 0,
+      from
+    ) != null;
+  }
+  async indexOf(searchElement, fromIndex = 0) {
+    const from = clampIndex(fromIndex, this.length);
+    if (from == null) {
+      return -1;
+    }
+    return (await this.materialArray.findFirstEntry(
+      (val) => this.mapFn(val) === searchElement,
+      void 0,
+      from
+    ))?.index ?? -1;
+  }
+  async slice(start, fromIndex = this.length) {
+    const slicedArray = await this.materialArray.slice(start, fromIndex);
+    return slicedArray.map(this.mapFn);
+  }
+  sampleIndex() {
+    return this.materialArray.sampleIndex();
+  }
+  async sampleEntry() {
+    const entry = await this.materialArray.sampleEntry();
+    if (entry) {
+      return { index: entry.index, value: this.mapFn(entry.value) };
+    } else {
+      return void 0;
+    }
+  }
+  async sampleValue() {
+    const value = await this.materialArray.sampleValue();
+    if (value) {
+      return this.mapFn(value);
+    } else {
+      return void 0;
+    }
+  }
+}
+
+export { Infinarray, InfinarrayView };

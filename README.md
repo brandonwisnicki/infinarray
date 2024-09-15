@@ -161,6 +161,30 @@ await arr.map(`my-new-array.jsonl`, (val, idx) => `${idx}) ${val}`, {
 
 To work with this new array, you must create a new Infinarray object pointing to this path
 
+## Views
+
+Infinarray Views allow you to access the file as if it were mapped with another function. Views do not change the underlying file in anyway and thus are readonly. You create a view from a previously created Infinarray object and a mapping function that converts the original values in the Infinarray object to the mapped value.
+
+```typescript
+import { Infinarray, InfinarrayView } from 'infinarray';
+
+// See above for the music.txt example file
+const myArray = new Infinarray<[string, number, string]>('music.txt', {
+  delimiter: '\n',
+  skipHeader: true,
+  parseLineFn: JSON.parse,
+});
+await myArray.init();
+
+const view = new InfinarrayView(
+  myArray,
+  (row: [string, number, string]) =>
+    `The artist ${row[0]} was born on ${row[1]} in the ${row[2]}`
+);
+
+console.log(await view.get(0)); // The artist Billy Joel was born on 1949 in the USA
+```
+
 ## Benchmarks
 
 The benchmarking program is in `test/benchmark.ts`
