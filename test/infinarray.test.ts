@@ -457,8 +457,8 @@ suite('infinarray', () => {
       const arr = new Infinarray<string>(BIG_FILE_PATH, {
         parseLineFn: (line) => line.toString(),
       });
-      await arr.init();
 
+      await arr.init();
       assert.strictEqual(
         await arr.includes(`["Banded Sea Krait","Turaco","Hermit Crab"]`),
         true
@@ -550,7 +550,7 @@ suite('infinarray', () => {
       );
 
       assert.deepStrictEqual(res, {
-        idx: 255,
+        index: 255,
         value: ['Leafy Seadragon', 'French Angelfish', 'Guinea Pig'],
       });
 
@@ -568,7 +568,7 @@ suite('infinarray', () => {
       );
 
       assert.deepStrictEqual(res3, {
-        idx: 548,
+        index: 548,
         value: ['Leafy Seadragon', 'Hawaiian Honeycreeper', 'Duck'],
       });
     });
@@ -581,7 +581,7 @@ suite('infinarray', () => {
         val.some((animal) => animal.toLowerCase().includes('polar bear'))
       );
       assert.deepStrictEqual(res, {
-        idx: 11,
+        index: 11,
         value: ['Polar Bear', 'Devil Fish', 'Horse'],
       });
 
@@ -603,7 +603,7 @@ suite('infinarray', () => {
       );
 
       assert.deepStrictEqual(res, {
-        idx: 999_101,
+        index: 999_101,
         value: ['Ant', 'Leafy Seadragon', 'Courser'],
       });
 
@@ -622,7 +622,7 @@ suite('infinarray', () => {
         val.some((animal) => animal.toLowerCase().includes('pigs and hogs'))
       );
       assert.deepStrictEqual(res, {
-        idx: 248,
+        index: 248,
         value: ['Barbet', 'Pigs and Hogs', 'Pigeon'],
       });
 

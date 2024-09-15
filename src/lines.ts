@@ -66,7 +66,11 @@ export const getLines = (splitString = '\n', skipFirstLine = false) => {
           if (lastSplitIdx !== splitCharIdx) {
             const line = buffer.subarray(lastSplitIdx, splitCharIdx);
             if (firstLineSkipped) {
-              this.push({ idx: currIdx++, byteIdx: numberBytes, line });
+              this.push({
+                idx: currIdx++,
+                byteIdx: numberBytes,
+                line: line.toString('utf8'),
+              });
             } else {
               firstLineSkipped = true;
             }
@@ -86,7 +90,11 @@ export const getLines = (splitString = '\n', skipFirstLine = false) => {
     flush(cb) {
       if (buffered && buffered.length > 0) {
         if (firstLineSkipped) {
-          this.push({ idx: currIdx++, byteIdx: numberBytes, line: buffered });
+          this.push({
+            idx: currIdx++,
+            byteIdx: numberBytes,
+            line: Buffer.from(buffered).toString('utf8'),
+          });
         } else {
           firstLineSkipped = true;
         }
