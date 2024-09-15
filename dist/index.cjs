@@ -960,4 +960,5 @@ class InfinarrayView extends InfinarrayBase {
 }
 
 exports.Infinarray = Infinarray;
+exports.InfinarrayBase = InfinarrayBase;
 exports.InfinarrayView = InfinarrayView;

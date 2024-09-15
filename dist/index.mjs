@@ -957,4 +957,4 @@ class InfinarrayView extends InfinarrayBase {
   }
 }
 
-export { Infinarray, InfinarrayView };
+export { Infinarray, InfinarrayBase, InfinarrayView };

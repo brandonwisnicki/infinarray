@@ -286,4 +286,4 @@ declare class InfinarrayView<TMaterial, TView> extends InfinarrayBase<TView> {
     sampleValue(): Promise<TView | undefined>;
 }
 
-export { Infinarray, InfinarrayView };
+export { Infinarray, InfinarrayBase, InfinarrayView };
