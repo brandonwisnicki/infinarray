@@ -613,6 +613,9 @@ class Infinarray extends InfinarrayBase {
         "Infinarray is in readonly mode, objects cannot be pushed"
       );
     }
+    if (!this.ready) {
+      throw new Error(NOT_READY_ERROR);
+    }
     this.pushedValuesBuffer.push(...items);
     if (this.pushedValuesBuffer.length > this.maxPushedValuesBufferSize) {
       await this.flushPushedValues();
@@ -748,6 +751,7 @@ class Infinarray extends InfinarrayBase {
     const linesAndBytes = getLines(this.delimiter, this.skipHeader);
     const checkpoints = [];
     const precache = [];
+    this.arrayLength = 0;
     await pipeline(
       readStream,
       linesAndBytes,

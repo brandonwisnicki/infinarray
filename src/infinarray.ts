@@ -677,6 +677,10 @@ export class Infinarray<T> extends InfinarrayBase<T> {
       );
     }
 
+    if (!this.ready) {
+      throw new Error(NOT_READY_ERROR);
+    }
+
     this.pushedValuesBuffer.push(...items);
 
     if (this.pushedValuesBuffer.length > this.maxPushedValuesBufferSize) {
@@ -762,7 +766,6 @@ export class Infinarray<T> extends InfinarrayBase<T> {
     if (!this.ready) {
       throw new Error(NOT_READY_ERROR);
     }
-
     let checkpointIdx = Math.floor(idx / this.elementsPerCheckpoint);
     let offset = idx % this.elementsPerCheckpoint;
 
@@ -809,11 +812,9 @@ export class Infinarray<T> extends InfinarrayBase<T> {
       if (this.cachedChunk?.idx === checkpointIdx) {
         return this.cachedChunk.data[offset];
       }
-
       checkpointIdx = Math.floor(idx / this.elementsPerCheckpoint);
       offset = idx % this.elementsPerCheckpoint;
     }
-
     const skipToByte = this.checkpoints[checkpointIdx].byte;
     const readUntilByte =
       checkpointIdx + 1 < this.checkpoints.length
@@ -862,7 +863,7 @@ export class Infinarray<T> extends InfinarrayBase<T> {
     const linesAndBytes = getLines(this.delimiter, this.skipHeader);
     const checkpoints: Checkpoint[] = [];
     const precache: T[] = [];
-
+    this.arrayLength = 0;
     await pipeline(
       readStream,
       linesAndBytes,
