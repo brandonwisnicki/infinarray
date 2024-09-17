@@ -173,7 +173,7 @@ export class InfinarrayView<TMaterial, TView> extends InfinarrayBase<TView> {
     ) => void,
     thisArg?: any
   ): Promise<void> {
-    this.materialArray.forEach(
+    return this.materialArray.forEach(
       (value, index) => callbackfn(this.mapFn(value), index, this),
       thisArg
     );

@@ -343,7 +343,10 @@ export class Infinarray<T> extends InfinarrayBase<T> {
         if (idx >= startIndex) {
           const parsed = this.parseLine(chunk.line);
 
-          if (!entry && predicate.call(thisArg ?? this, parsed, idx, this)) {
+          if (
+            !entry &&
+            (await predicate.call(thisArg ?? this, parsed, idx, this))
+          ) {
             entry = { index: idx, value: parsed };
             return entry;
           }
@@ -460,7 +463,15 @@ export class Infinarray<T> extends InfinarrayBase<T> {
 
     const readStream = createReadStream(this.filePath);
     const linesAndBytes = getLines(this.delimiter, this.skipHeader);
+    const strm = readStream.pipe(linesAndBytes);
+
     let idx = 0;
+    // for await (const chunk of strm) {
+    //   const parsed = this.parseLine(chunk.line);
+    //   callbackfn.call(thisArg ?? this, parsed, idx, this);
+    //   idx++;
+    // }
+
     await pipeline(
       readStream,
       linesAndBytes,
