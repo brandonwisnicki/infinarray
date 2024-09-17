@@ -307,34 +307,49 @@ export class Infinarray<T> extends InfinarrayBase<T> {
       start: startCheckpoint.byte,
     });
     const linesAndBytes = getLines(this.delimiter, this.skipHeader);
-    let idx = startCheckpoint.index;
+    const idx = startCheckpoint.index;
     const entryFound = 'ENTRY FOUND';
     let entry: { index: number; value: T } | undefined;
     try {
-      await pipeline(
-        readStream,
-        linesAndBytes,
-        new Writable({
-          objectMode: true,
-          write: (chunk, _, callback) => {
-            if (idx >= startIndex) {
-              const parsed = this.parseLine(chunk.line);
+      // await pipeline(
+      //   readStream,
+      //   linesAndBytes,
+      //   new Writable({
+      //     objectMode: true,
+      //     write: (chunk, _, callback) => {
+      //       if (idx >= startIndex) {
+      //         const parsed = this.parseLine(chunk.line);
 
-              if (
-                !entry &&
-                predicate.call(thisArg ?? this, parsed, idx, this)
-              ) {
-                entry = { index: idx, value: parsed };
-                setImmediate(() => ac.abort(entryFound));
-                return callback();
-              }
-            }
-            idx++;
-            return callback();
-          },
-        }),
-        { signal }
-      );
+      //         if (
+      //           !entry &&
+      //           predicate.call(thisArg ?? this, parsed, idx, this)
+      //         ) {
+      //           entry = { index: idx, value: parsed };
+      //           setImmediate(() => ac.abort(entryFound));
+      //           return callback();
+      //         }
+      //       }
+      //       idx++;
+      //       return callback();
+      //     },
+      //   }),
+      //   { signal }
+      // );
+
+      const pipe = readStream.pipe(linesAndBytes);
+
+      let idx = 0;
+      for await (const chunk of pipe) {
+        if (idx >= startIndex) {
+          const parsed = this.parseLine(chunk.line);
+
+          if (!entry && predicate.call(thisArg ?? this, parsed, idx, this)) {
+            entry = { index: idx, value: parsed };
+            return entry;
+          }
+        }
+        idx++;
+      }
 
       return undefined;
     } catch (err) {
