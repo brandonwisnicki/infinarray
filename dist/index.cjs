@@ -325,27 +325,36 @@ class Infinarray extends InfinarrayBase {
       return void 0;
     }
     const ac = new AbortController();
+    const { signal } = ac;
     const startCheckpoint = this.checkpoints[Math.floor(startIndex / this.elementsPerCheckpoint)];
     const readStream = fs.createReadStream(this.filePath, {
       start: startCheckpoint.byte
     });
     const linesAndBytes = getLines(this.delimiter, this.skipHeader);
-    startCheckpoint.index;
+    let idx = startCheckpoint.index;
     const entryFound = "ENTRY FOUND";
     let entry;
     try {
-      const pipe = readStream.pipe(linesAndBytes);
-      let idx2 = 0;
-      for await (const chunk of pipe) {
-        if (idx2 >= startIndex) {
-          const parsed = this.parseLine(chunk.line);
-          if (!entry && predicate.call(thisArg ?? this, parsed, idx2, this)) {
-            entry = { index: idx2, value: parsed };
-            return entry;
+      await promises.pipeline(
+        readStream,
+        linesAndBytes,
+        new stream.Writable({
+          objectMode: true,
+          write: (chunk, _, callback) => {
+            if (idx >= startIndex) {
+              const parsed = this.parseLine(chunk.line);
+              if (!entry && predicate.call(thisArg ?? this, parsed, idx, this)) {
+                entry = { index: idx, value: parsed };
+                setImmediate(() => ac.abort(entryFound));
+                return callback();
+              }
+            }
+            idx++;
+            return callback();
           }
-        }
-        idx2++;
-      }
+        }),
+        { signal }
+      );
       return void 0;
     } catch (err) {
       if (ac.signal.aborted && ac.signal.reason === entryFound) {
@@ -425,6 +434,7 @@ class Infinarray extends InfinarrayBase {
     }
     const readStream = fs.createReadStream(this.filePath);
     const linesAndBytes = getLines(this.delimiter, this.skipHeader);
+    readStream.pipe(linesAndBytes);
     let idx = 0;
     await promises.pipeline(
       readStream,
@@ -896,7 +906,7 @@ class InfinarrayView extends InfinarrayBase {
     );
   }
   async forEach(callbackfn, thisArg) {
-    this.materialArray.forEach(
+    return this.materialArray.forEach(
       (value, index) => callbackfn(this.mapFn(value), index, this),
       thisArg
     );
